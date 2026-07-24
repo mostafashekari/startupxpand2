@@ -1,0 +1,32 @@
+name: Debug v3.1 source archive
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  debug:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct diagnostic archive
+        shell: bash
+        run: |
+          set -u
+          mkdir -p diagnostic
+          ls -l source-v31/archive.part.* > diagnostic/parts.txt
+          wc -c source-v31/archive.part.* >> diagnostic/parts.txt
+          cat source-v31/archive.part.* > diagnostic/source.base64
+          base64 --decode --ignore-garbage diagnostic/source.base64 > diagnostic/source.tar.gz 2> diagnostic/base64-error.txt || true
+          sha256sum diagnostic/source.base64 diagnostic/source.tar.gz > diagnostic/SHA256SUMS.txt
+          gzip -t diagnostic/source.tar.gz > diagnostic/gzip-test.txt 2>&1 || true
+          tar -tzf diagnostic/source.tar.gz > diagnostic/tar-list.txt 2> diagnostic/tar-error.txt || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v31-source-diagnostic
+          path: diagnostic/
+          retention-days: 3
