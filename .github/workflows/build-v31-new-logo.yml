@@ -23,11 +23,8 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          ls -lh source-v31/archive.part.*
           cat source-v31/archive.part.* > /tmp/v31-source.base64
-          wc -c /tmp/v31-source.base64
           base64 --decode --ignore-garbage /tmp/v31-source.base64 > /tmp/v31-source.tar.gz
-          sha256sum /tmp/v31-source.tar.gz
           gzip -t /tmp/v31-source.tar.gz
           rm -rf project
           mkdir project
@@ -77,8 +74,26 @@ jobs:
           npm run android:prepare
 
       - name: Build Android APKs
+        id: android_build
+        continue-on-error: true
         working-directory: project/android
-        run: ./gradlew --no-daemon --stacktrace clean assembleRelease assembleDebug
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew --no-daemon --stacktrace clean assembleRelease assembleDebug 2>&1 | tee ../../gradle-build.log
+
+      - name: Upload Android build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Startup-Xpand-v4.1.1-gradle-diagnostics
+          path: gradle-build.log
+          retention-days: 3
+          if-no-files-found: error
+
+      - name: Stop when Android build failed
+        if: steps.android_build.outcome == 'failure'
+        run: exit 1
 
       - name: Prepare and validate build artifacts
         shell: bash
