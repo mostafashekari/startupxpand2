@@ -1,6 +1,11 @@
 name: Build v3.1 UI with new logo
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-v31-new-logo.yml'
+      - 'source-v31/**'
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -13,8 +18,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
-      VERSION_NAME: 4.1.1
-      VERSION_CODE: '40101'
+      VERSION_NAME: 4.1.2
+      VERSION_CODE: '40102'
 
     steps:
       - uses: actions/checkout@v4
@@ -52,6 +57,32 @@ jobs:
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager 'platform-tools' 'platforms;android-36' 'build-tools;36.0.0'
 
+      - name: Bundle consistent application fonts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends fonts-roboto fonts-noto-core
+          mkdir -p project/public/fonts
+          cp /usr/share/fonts/truetype/roboto/unhinted/RobotoTTF/Roboto-Regular.ttf project/public/fonts/
+          cp /usr/share/fonts/truetype/roboto/unhinted/RobotoTTF/Roboto-Medium.ttf project/public/fonts/
+          cp /usr/share/fonts/truetype/roboto/unhinted/RobotoTTF/Roboto-Bold.ttf project/public/fonts/
+          cp /usr/share/fonts/truetype/roboto/unhinted/RobotoTTF/Roboto-Black.ttf project/public/fonts/
+          cp /usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf project/public/fonts/
+          cp /usr/share/fonts/truetype/noto/NotoSansArabic-Medium.ttf project/public/fonts/
+          cp /usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf project/public/fonts/
+          python3 - <<'PY'
+          from pathlib import Path
+          css = Path('project/app/globals.css')
+          text = css.read_text(encoding='utf-8')
+          fonts = """@font-face{font-family:'StartupRoboto';src:url('/fonts/Roboto-Regular.ttf') format('truetype');font-style:normal;font-weight:400;font-display:swap}@font-face{font-family:'StartupRoboto';src:url('/fonts/Roboto-Medium.ttf') format('truetype');font-style:normal;font-weight:500 600;font-display:swap}@font-face{font-family:'StartupRoboto';src:url('/fonts/Roboto-Bold.ttf') format('truetype');font-style:normal;font-weight:700 800;font-display:swap}@font-face{font-family:'StartupRoboto';src:url('/fonts/Roboto-Black.ttf') format('truetype');font-style:normal;font-weight:900;font-display:swap}@font-face{font-family:'StartupArabic';src:url('/fonts/NotoSansArabic-Regular.ttf') format('truetype');font-style:normal;font-weight:400;font-display:swap}@font-face{font-family:'StartupArabic';src:url('/fonts/NotoSansArabic-Medium.ttf') format('truetype');font-style:normal;font-weight:500 600;font-display:swap}@font-face{font-family:'StartupArabic';src:url('/fonts/NotoSansArabic-Bold.ttf') format('truetype');font-style:normal;font-weight:700 900;font-display:swap}"""
+          text = text.replace("font-family:Roboto,\"Helvetica Neue\",Arial,sans-serif", "font-family:'StartupRoboto',Roboto,\"Helvetica Neue\",Arial,sans-serif")
+          text = text.replace("font-family:\"Noto Sans Arabic\",Tahoma,\"Segoe UI\",Arial,sans-serif", "font-family:'StartupArabic',\"Noto Sans Arabic\",Tahoma,\"Segoe UI\",Arial,sans-serif")
+          css.write_text(fonts + text, encoding='utf-8')
+          PY
+          grep -q "StartupRoboto" project/app/globals.css
+          grep -q "StartupArabic" project/app/globals.css
+
       - name: Generate final logo assets
         working-directory: project
         run: |
@@ -87,7 +118,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Startup-Xpand-v4.1.1-gradle-diagnostics
+          name: Startup-Xpand-v4.1.2-gradle-diagnostics
           path: gradle-build.log
           retention-days: 3
           if-no-files-found: error
@@ -106,18 +137,20 @@ jobs:
           test -s "$UNSIGNED"
           test -s "$DEBUG"
           mkdir -p dist
-          "$TOOLS/zipalign" -p -f 4 "$UNSIGNED" 'dist/Startup-Xpand-v4.1.1-v31-ui-aligned-unsigned.apk'
-          cp "$DEBUG" 'dist/Startup-Xpand-v4.1.1-v31-ui-preview-debug.apk'
+          "$TOOLS/zipalign" -p -f 4 "$UNSIGNED" 'dist/Startup-Xpand-v4.1.2-v31-fixed-font-aligned-unsigned.apk'
+          cp "$DEBUG" 'dist/Startup-Xpand-v4.1.2-v31-fixed-font-preview-debug.apk'
           cp "$TOOLS/lib/apksigner.jar" dist/apksigner.jar
           cp project/public/logo.png dist/logo.png
-          "$TOOLS/zipalign" -c -p 4 'dist/Startup-Xpand-v4.1.1-v31-ui-aligned-unsigned.apk' > dist/zipalign.txt
-          unzip -t 'dist/Startup-Xpand-v4.1.1-v31-ui-aligned-unsigned.apk' > dist/zip-test.txt
-          "$TOOLS/aapt" dump badging 'dist/Startup-Xpand-v4.1.1-v31-ui-aligned-unsigned.apk' > dist/aapt-badging.txt
+          "$TOOLS/zipalign" -c -p 4 'dist/Startup-Xpand-v4.1.2-v31-fixed-font-aligned-unsigned.apk' > dist/zipalign.txt
+          unzip -t 'dist/Startup-Xpand-v4.1.2-v31-fixed-font-aligned-unsigned.apk' > dist/zip-test.txt
+          unzip -l 'dist/Startup-Xpand-v4.1.2-v31-fixed-font-aligned-unsigned.apk' | grep -E 'Roboto-(Regular|Medium|Bold|Black)\.ttf|NotoSansArabic-(Regular|Medium|Bold)\.ttf' > dist/bundled-fonts.txt
+          test "$(wc -l < dist/bundled-fonts.txt)" -eq 7
+          "$TOOLS/aapt" dump badging 'dist/Startup-Xpand-v4.1.2-v31-fixed-font-aligned-unsigned.apk' > dist/aapt-badging.txt
           sha256sum dist/*.apk > dist/SHA256SUMS.txt
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Startup-Xpand-v4.1.1-v31-ui-new-logo
+          name: Startup-Xpand-v4.1.2-v31-fixed-font
           path: dist/
           retention-days: 30
           if-no-files-found: error
