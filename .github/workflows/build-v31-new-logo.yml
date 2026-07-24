@@ -72,6 +72,7 @@ jobs:
           npx cap add android
           npx cap sync android
           npm run android:prepare
+          rm -f android/app/src/main/res/values/ic_launcher_background.xml
 
       - name: Build Android APKs
         id: android_build
