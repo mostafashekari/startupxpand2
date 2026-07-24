@@ -101,7 +101,7 @@ jobs:
 
           # The approved v3.1 header and bottom navigation use a permanently light
           # surface. Do not inherit text colors from the dark theme on these areas.
-          contrast = """.v31-wordmark{color:#111827!important}.v31-wordmark>span{color:#111827!important;font-weight:500;text-shadow:none}.v31-wordmark>span>b{color:#0b7f80!important;font-weight:700}.v31-language,.v31-settings{color:#111827!important}.v31-bottom-nav button{color:#64748b}.v31-bottom-nav button.active{color:#0b7f80}html[data-theme='dark'] .v31-wordmark,html[data-theme='dark'] .v31-wordmark>span{color:#111827!important}html[data-theme='dark'] .v31-wordmark>span>b{color:#0b7f80!important}"""
+          contrast = """.v31-wordmark{color:#111827!important}.v31-wordmark>span{color:#111827!important;font-weight:500;text-shadow:none}.v31-wordmark>span>b{color:#087476!important;font-weight:700}.v31-language,.v31-settings{color:#111827!important}.v31-bottom-nav button{color:#5f6b7d}.v31-bottom-nav button.active{color:#087476}html[data-theme='dark'] .v31-wordmark,html[data-theme='dark'] .v31-wordmark>span{color:#111827!important}html[data-theme='dark'] .v31-wordmark>span>b{color:#087476!important}"""
           css.write_text(fonts + text + contrast, encoding='utf-8')
 
           logo_script = Path('project/scripts/generate-brand-assets.py')
@@ -115,7 +115,7 @@ jobs:
           grep -q "StartupArabic" project/app/globals.css
           ! grep -q 'font-size:7.5px' project/app/globals.css
           grep -q "v31-wordmark>span{color:#111827" project/app/globals.css
-          grep -q "v31-bottom-nav button{color:#64748b" project/app/globals.css
+          grep -q "v31-bottom-nav button{color:#5f6b7d" project/app/globals.css
 
       - name: Generate final logo assets
         working-directory: project
