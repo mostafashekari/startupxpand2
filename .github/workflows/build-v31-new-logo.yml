@@ -18,8 +18,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
-      VERSION_NAME: 4.1.4
-      VERSION_CODE: '40104'
+      VERSION_NAME: 4.1.5
+      VERSION_CODE: '40105'
 
     steps:
       - uses: actions/checkout@v4
@@ -99,13 +99,18 @@ jobs:
 
           text = pattern.sub(scale, text)
 
-          # The approved v3.1 header and bottom navigation use a permanently light
-          # surface. Do not inherit text colors from the dark theme on these areas.
           contrast = """.v31-wordmark{color:#111827!important}.v31-wordmark>span{color:#111827!important;font-weight:500;text-shadow:none}.v31-wordmark>span>b{color:#087476!important;font-weight:700}.v31-language,.v31-settings{color:#111827!important}.v31-bottom-nav button{color:#5f6b7d}.v31-bottom-nav button.active{color:#087476}html[data-theme='dark'] .v31-wordmark,html[data-theme='dark'] .v31-wordmark>span{color:#111827!important}html[data-theme='dark'] .v31-wordmark>span>b{color:#087476!important}"""
           css.write_text(fonts + text + contrast, encoding='utf-8')
 
           logo_script = Path('project/scripts/generate-brand-assets.py')
           logo = logo_script.read_text(encoding='utf-8')
+          # Pillow thumbnail() never enlarges small artwork. Explicit resizing keeps
+          # the logo proportion consistent in the app, splash and Android launcher.
+          logo = logo.replace(
+              "    asset.thumbnail((target, target), Image.Resampling.LANCZOS)",
+              "    scale = min(target / asset.width, target / asset.height)\n"
+              "    asset = asset.resize((max(1, round(asset.width * scale)), max(1, round(asset.height * scale))), Image.Resampling.LANCZOS)"
+          )
           logo = logo.replace("foreground(1024, .68)", "foreground(1024, .66)")
           logo = logo.replace("white_icon(size, .76)", "white_icon(size, .78)")
           logo = logo.replace("white_icon(size, .70, .50)", "white_icon(size, .72, .50)")
@@ -117,11 +122,32 @@ jobs:
           grep -q "v31-wordmark>span{color:#111827" project/app/globals.css
           grep -q "v31-bottom-nav button{color:#5f6b7d" project/app/globals.css
 
-      - name: Generate final logo assets
+      - name: Generate and verify synchronized logo assets
         working-directory: project
         run: |
           python3 -m pip install --disable-pip-version-check pillow numpy
           python3 scripts/generate-brand-assets.py
+          python3 - <<'PY'
+          from PIL import Image
+          import numpy as np
+
+          checks = [
+              ('public/logo.png', .72, .62),
+              ('native-icons/startup_xpand_logo_foreground.png', .62, .55),
+              ('native-icons/ic_launcher_xxxhdpi.png', .72, .62),
+          ]
+          for path, min_width, min_height in checks:
+              image = np.asarray(Image.open(path).convert('RGBA')).astype(int)
+              red, green, blue, alpha = [image[:, :, index] for index in range(4)]
+              visible = (blue > red + 10) & (blue > green + 5) & (blue < 250) & (alpha > 50)
+              ys, xs = np.where(visible)
+              assert len(xs), f'Logo mark is missing in {path}'
+              width_ratio = (xs.max() - xs.min() + 1) / image.shape[1]
+              height_ratio = (ys.max() - ys.min() + 1) / image.shape[0]
+              assert width_ratio >= min_width, f'Logo is too small in {path}: {width_ratio:.3f}'
+              assert height_ratio >= min_height, f'Logo is too small in {path}: {height_ratio:.3f}'
+              print(f'{path}: {width_ratio:.1%} x {height_ratio:.1%}')
+          PY
 
       - name: Install, typecheck and build Next.js
         working-directory: project
@@ -152,7 +178,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Startup-Xpand-v4.1.4-gradle-diagnostics
+          name: Startup-Xpand-v4.1.5-gradle-diagnostics
           path: gradle-build.log
           retention-days: 3
           if-no-files-found: error
@@ -171,20 +197,20 @@ jobs:
           test -s "$UNSIGNED"
           test -s "$DEBUG"
           mkdir -p dist
-          "$TOOLS/zipalign" -p -f 4 "$UNSIGNED" 'dist/Startup-Xpand-v4.1.4-v31-contrast-aligned-unsigned.apk'
-          cp "$DEBUG" 'dist/Startup-Xpand-v4.1.4-v31-contrast-preview-debug.apk'
+          "$TOOLS/zipalign" -p -f 4 "$UNSIGNED" 'dist/Startup-Xpand-v4.1.5-v31-logo-synced-aligned-unsigned.apk'
+          cp "$DEBUG" 'dist/Startup-Xpand-v4.1.5-v31-logo-synced-preview-debug.apk'
           cp "$TOOLS/lib/apksigner.jar" dist/apksigner.jar
           cp project/public/logo.png dist/logo.png
-          "$TOOLS/zipalign" -c -p 4 'dist/Startup-Xpand-v4.1.4-v31-contrast-aligned-unsigned.apk' > dist/zipalign.txt
-          unzip -t 'dist/Startup-Xpand-v4.1.4-v31-contrast-aligned-unsigned.apk' > dist/zip-test.txt
-          unzip -l 'dist/Startup-Xpand-v4.1.4-v31-contrast-aligned-unsigned.apk' | grep -E 'Roboto-(Regular|Medium|Bold|Black)\.ttf|NotoSansArabic-(Regular|Medium|Bold)\.ttf' > dist/bundled-fonts.txt
+          "$TOOLS/zipalign" -c -p 4 'dist/Startup-Xpand-v4.1.5-v31-logo-synced-aligned-unsigned.apk' > dist/zipalign.txt
+          unzip -t 'dist/Startup-Xpand-v4.1.5-v31-logo-synced-aligned-unsigned.apk' > dist/zip-test.txt
+          unzip -l 'dist/Startup-Xpand-v4.1.5-v31-logo-synced-aligned-unsigned.apk' | grep -E 'Roboto-(Regular|Medium|Bold|Black)\.ttf|NotoSansArabic-(Regular|Medium|Bold)\.ttf' > dist/bundled-fonts.txt
           test "$(wc -l < dist/bundled-fonts.txt)" -eq 7
-          "$TOOLS/aapt" dump badging 'dist/Startup-Xpand-v4.1.4-v31-contrast-aligned-unsigned.apk' > dist/aapt-badging.txt
+          "$TOOLS/aapt" dump badging 'dist/Startup-Xpand-v4.1.5-v31-logo-synced-aligned-unsigned.apk' > dist/aapt-badging.txt
           sha256sum dist/*.apk > dist/SHA256SUMS.txt
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Startup-Xpand-v4.1.4-v31-contrast
+          name: Startup-Xpand-v4.1.5-v31-logo-synced
           path: dist/
           retention-days: 30
           if-no-files-found: error
