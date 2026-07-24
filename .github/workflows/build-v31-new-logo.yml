@@ -15,42 +15,25 @@ jobs:
     env:
       VERSION_NAME: 4.1.1
       VERSION_CODE: '40101'
-      SOURCE_ARCHIVE: source/Startup-Xpand-Capacitor-v4.1.0-source.tar.gz
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate base source archive
+      - name: Reconstruct and verify exact v3.1 source
         shell: bash
         run: |
           set -Eeuo pipefail
-          ls -lh "$SOURCE_ARCHIVE"
-          file "$SOURCE_ARCHIVE"
-          sha256sum "$SOURCE_ARCHIVE"
-          gzip -t "$SOURCE_ARCHIVE"
-
-      - name: Extract base application source
-        shell: bash
-        run: |
-          set -Eeuo pipefail
+          cat source-v31/archive.part.* | base64 -d > /tmp/v31-source.tar.gz
+          test "$(sha256sum /tmp/v31-source.tar.gz | cut -d' ' -f1)" = 'ff5962047b74979477ac1fe55ed215e8830901285bd1c613c3e1a486c70193eb'
+          gzip -t /tmp/v31-source.tar.gz
           rm -rf project
           mkdir project
-          tar -xzf "$SOURCE_ARCHIVE" -C project
+          tar -xzf /tmp/v31-source.tar.gz -C project
           test -s project/app/page.tsx
           test -s project/app/globals.css
-
-      - name: Decode and apply exact v3.1 interface patch
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          base64 -d source-v31/v31.patch.gz.base64 > /tmp/v31.patch.gz
-          gzip -t /tmp/v31.patch.gz
-          gzip -dc /tmp/v31.patch.gz > /tmp/v31.patch
-          (cd project && patch -p1 --forward < /tmp/v31.patch)
-          mkdir -p project/brand
-          cp brand/logo-source.base64 project/brand/logo-source.base64
           grep -q 'Turn your experience' project/app/page.tsx
           grep -q 'v31-hero' project/app/globals.css
+          test -s project/brand/logo-source.base64
 
       - uses: actions/setup-node@v4
         with:
@@ -69,7 +52,7 @@ jobs:
           yes | sdkmanager --licenses >/dev/null || true
           sdkmanager 'platform-tools' 'platforms;android-36' 'build-tools;36.0.0'
 
-      - name: Generate final brand assets
+      - name: Generate final logo assets
         working-directory: project
         run: |
           python3 -m pip install --disable-pip-version-check pillow numpy
