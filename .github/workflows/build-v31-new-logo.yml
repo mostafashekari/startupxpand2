@@ -1,0 +1,123 @@
+name: Build v3.1 UI with new logo
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      VERSION_NAME: 4.1.1
+      VERSION_CODE: '40101'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct and verify exact v3.1 source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          cat source-v31/archive.part.* > /tmp/v31-source.base64
+          base64 --decode --ignore-garbage /tmp/v31-source.base64 > /tmp/v31-source.tar.gz
+          gzip -t /tmp/v31-source.tar.gz
+          rm -rf project
+          mkdir project
+          tar -xzf /tmp/v31-source.tar.gz -C project
+          test -s project/app/page.tsx
+          test -s project/app/globals.css
+          grep -q 'Turn your experience' project/app/page.tsx
+          grep -q 'v31-hero' project/app/globals.css
+          test -s project/brand/logo-source.base64
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platform-tools' 'platforms;android-36' 'build-tools;36.0.0'
+
+      - name: Generate final logo assets
+        working-directory: project
+        run: |
+          python3 -m pip install --disable-pip-version-check pillow numpy
+          python3 scripts/generate-brand-assets.py
+
+      - name: Install, typecheck and build Next.js
+        working-directory: project
+        run: |
+          npm install --no-audit --no-fund
+          npm run typecheck
+          npm run build
+
+      - name: Generate Capacitor Android project
+        working-directory: project
+        run: |
+          rm -rf android
+          npx cap add android
+          npx cap sync android
+          npm run android:prepare
+          rm -f android/app/src/main/res/values/ic_launcher_background.xml
+
+      - name: Build Android APKs
+        id: android_build
+        continue-on-error: true
+        working-directory: project/android
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew --no-daemon --stacktrace clean assembleRelease assembleDebug 2>&1 | tee ../../gradle-build.log
+
+      - name: Upload Android build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Startup-Xpand-v4.1.1-gradle-diagnostics
+          path: gradle-build.log
+          retention-days: 3
+          if-no-files-found: error
+
+      - name: Stop when Android build failed
+        if: steps.android_build.outcome == 'failure'
+        run: exit 1
+
+      - name: Prepare and validate build artifacts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          TOOLS="$ANDROID_HOME/build-tools/36.0.0"
+          UNSIGNED="$(find project/android/app/build/outputs/apk/release -type f -name '*.apk' | head -n1)"
+          DEBUG="$(find project/android/app/build/outputs/apk/debug -type f -name '*.apk' | head -n1)"
+          test -s "$UNSIGNED"
+          test -s "$DEBUG"
+          mkdir -p dist
+          "$TOOLS/zipalign" -p -f 4 "$UNSIGNED" 'dist/Startup-Xpand-v4.1.1-v31-ui-aligned-unsigned.apk'
+          cp "$DEBUG" 'dist/Startup-Xpand-v4.1.1-v31-ui-preview-debug.apk'
+          cp "$TOOLS/lib/apksigner.jar" dist/apksigner.jar
+          cp project/public/logo.png dist/logo.png
+          "$TOOLS/zipalign" -c -p 4 'dist/Startup-Xpand-v4.1.1-v31-ui-aligned-unsigned.apk' > dist/zipalign.txt
+          unzip -t 'dist/Startup-Xpand-v4.1.1-v31-ui-aligned-unsigned.apk' > dist/zip-test.txt
+          "$TOOLS/aapt" dump badging 'dist/Startup-Xpand-v4.1.1-v31-ui-aligned-unsigned.apk' > dist/aapt-badging.txt
+          sha256sum dist/*.apk > dist/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Startup-Xpand-v4.1.1-v31-ui-new-logo
+          path: dist/
+          retention-days: 30
+          if-no-files-found: error
