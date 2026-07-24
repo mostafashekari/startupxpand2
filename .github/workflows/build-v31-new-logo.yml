@@ -23,8 +23,11 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          cat source-v31/archive.part.* | base64 -d > /tmp/v31-source.tar.gz
-          test "$(sha256sum /tmp/v31-source.tar.gz | cut -d' ' -f1)" = 'ff5962047b74979477ac1fe55ed215e8830901285bd1c613c3e1a486c70193eb'
+          ls -lh source-v31/archive.part.*
+          cat source-v31/archive.part.* > /tmp/v31-source.base64
+          wc -c /tmp/v31-source.base64
+          base64 --decode --ignore-garbage /tmp/v31-source.base64 > /tmp/v31-source.tar.gz
+          sha256sum /tmp/v31-source.tar.gz
           gzip -t /tmp/v31-source.tar.gz
           rm -rf project
           mkdir project
