@@ -1,0 +1,10 @@
+node_modules/
+.next/
+out/
+android/
+*.jks
+*.keystore
+*.p12
+.env*
+/public/logo.png
+/native-icons/*.png

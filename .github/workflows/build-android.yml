@@ -1,0 +1,112 @@
+name: Build Startup Xpand Android
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: startup-xpand2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      VERSION_NAME: 4.1.0
+      VERSION_CODE: '40100'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract application source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rm -rf project
+          mkdir project
+          tar -xzf source/Startup-Xpand-Capacitor-v4.1.0-source.tar.gz -C project
+
+      - name: Publish readable source files to the repository
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          rsync -a --exclude='.github/' --exclude='README.md' --exclude='public/logo.png' --exclude='native-icons/' project/ ./
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .gitignore android-template app brand capacitor.config.ts next-env.d.ts next.config.mjs package.json scripts signing tsconfig.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'Add Startup Xpand Android source [skip ci]'
+            git push
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platform-tools' 'platforms;android-36' 'build-tools;36.0.0'
+
+      - name: Generate logo and Android icon assets
+        working-directory: project
+        run: |
+          python3 -m pip install --disable-pip-version-check pillow numpy
+          python3 scripts/generate-brand-assets.py
+
+      - name: Install and validate application
+        working-directory: project
+        run: |
+          npm install --no-audit --no-fund
+          npm run typecheck
+          npm run build
+
+      - name: Generate Capacitor Android project
+        working-directory: project
+        run: |
+          rm -rf android
+          npx cap add android
+          npx cap sync android
+          npm run android:prepare
+
+      - name: Build Android APKs
+        working-directory: project/android
+        run: ./gradlew --no-daemon --stacktrace clean assembleRelease assembleDebug
+
+      - name: Prepare build files
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          TOOLS="$ANDROID_HOME/build-tools/36.0.0"
+          UNSIGNED="$(find project/android/app/build/outputs/apk/release -type f -name '*.apk' | head -n1)"
+          DEBUG="$(find project/android/app/build/outputs/apk/debug -type f -name '*.apk' | head -n1)"
+          test -s "$UNSIGNED"
+          test -s "$DEBUG"
+          mkdir -p dist
+          "$TOOLS/zipalign" -p -f 4 "$UNSIGNED" "dist/Startup-Xpand-v${VERSION_NAME}-aligned-unsigned.apk"
+          cp "$DEBUG" "dist/Startup-Xpand-v${VERSION_NAME}-preview-debug.apk"
+          cp "$TOOLS/lib/apksigner.jar" dist/apksigner.jar
+          cp project/public/logo.png dist/logo.png
+          "$TOOLS/zipalign" -c -p 4 "dist/Startup-Xpand-v${VERSION_NAME}-aligned-unsigned.apk"
+          unzip -t "dist/Startup-Xpand-v${VERSION_NAME}-aligned-unsigned.apk" > dist/zip-test.txt
+          sha256sum dist/*.apk > dist/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Startup-Xpand-Android-v4.1.0
+          path: dist/
+          retention-days: 30
+          if-no-files-found: error

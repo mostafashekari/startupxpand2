@@ -1,28 +1,10 @@
 # Startup Xpand Android
 
-Android application for Startup Xpand, built with Next.js, TypeScript, Capacitor and Kotlin.
+این ریپازیتوری نسخه اندروید Startup Xpand را نگهداری می‌کند.
 
-## User experience
+- ظاهر و امکانات نسخه فعلی بدون تغییر حفظ شده است.
+- لوگوی جدید به‌عنوان لوگوی داخل برنامه، Splash، Adaptive Icon، Round Icon و Themed Icon استفاده می‌شود.
+- رابط کاربری انگلیسی، ترکی و عربی است و عربی از RTL پشتیبانی می‌کند.
+- پروژه با Next.js، TypeScript، Capacitor و Kotlin ساخته می‌شود.
 
-- English, Turkish and Arabic
-- RTL support for Arabic
-- Offline draft and retry queue
-- Native sharing, network awareness, haptics and Android status-bar integration
-- Responsive light and dark themes
-- Adaptive, round and themed launcher icons generated from the final brand logo
-
-## Brand logo
-
-The source logo is stored as Base64 text in `brand/logo-source.base64`. Run:
-
-```bash
-python3 scripts/generate-brand-assets.py
-```
-
-This generates the in-app logo, splash artwork and all Android launcher icon densities without committing generated binary files.
-
-## Android build
-
-GitHub Actions generates the Capacitor Android project, builds release and preview APKs, aligns the release package and publishes the build files as a workflow artifact.
-
-Private production signing material is intentionally not committed to this public repository.
+GitHub Actions پروژه را با Android SDK رسمی می‌سازد، APK نسخه Release را تراز می‌کند و فایل‌های ساخت را به‌صورت Artifact تحویل می‌دهد. کلید خصوصی امضای انتشار عمداً در ریپازیتوری عمومی قرار نگرفته است.
